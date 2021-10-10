@@ -2,6 +2,12 @@
 name = "concurrent-slice"
 version = "0.1.0"
 edition = "2018"
+description = "Extend slice-type types with methods for concurrent processing."
+documentation = "https://docs.rs/concurrent-slice/"
+repository = "https://github.com/jerry73204/concurrent-slice.git"
+homepage = "https://github.com/jerry73204/concurrent-slice"
+readme = "README.md"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
