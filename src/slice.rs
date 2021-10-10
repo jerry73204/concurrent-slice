@@ -99,7 +99,7 @@ pub trait ConcurrentSlice<T> {
         }
     }
 
-    fn concurrent_iter(self) -> Iter<Self, T>
+    fn owning_iter(self) -> Iter<Self, T>
     where
         Self: 'static + Send + Deref + CloneStableAddress,
         Self::Target: AsRef<[T]>,
@@ -108,7 +108,7 @@ pub trait ConcurrentSlice<T> {
         Iter { owner, index: 0 }
     }
 
-    fn concurrent_windows(self, size: usize) -> Windows<Self, T>
+    fn owning_windows(self, size: usize) -> Windows<Self, T>
     where
         Self: 'static + Send + Deref + CloneStableAddress,
         Self::Target: AsRef<[T]>,

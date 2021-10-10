@@ -2,6 +2,7 @@ use crate::common::*;
 
 /// The guard is used to recover the owning data from [Chunks].
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct Guard<S> {
     pub(super) data: Arc<S>,
 }
