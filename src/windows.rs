@@ -1,6 +1,6 @@
 use crate::common::*;
 
-/// The iterator returned from [owning_iter()](crate::slice::ConcurrentSlice::owning_windows).
+/// The iterator returned from [owning_windows()](crate::slice::ConcurrentSlice::owning_windows).
 #[derive(Debug)]
 pub struct Windows<S, T> {
     pub(super) owner: OwningRef<S, [T]>,
