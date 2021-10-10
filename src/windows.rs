@@ -37,4 +37,15 @@ where
         self.index += 1;
         Some(window)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.owner.len() >= self.size {
+            let len = self.owner.len() - self.size + 1;
+            (len, Some(len))
+        } else {
+            (0, Some(0))
+        }
+    }
 }
+
+impl<S, T> ExactSizeIterator for Windows<S, T> where S: CloneStableAddress {}

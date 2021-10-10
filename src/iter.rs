@@ -33,4 +33,11 @@ where
         self.index += 1;
         Some(item)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.owner.len();
+        (len, Some(len))
+    }
 }
+
+impl<S, T> ExactSizeIterator for Iter<S, T> where S: CloneStableAddress {}
