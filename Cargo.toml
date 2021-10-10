@@ -1,0 +1,13 @@
+[package]
+name = "concurrent-slice"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num_cpus = "1.13.0"
+owning_ref = "0.4.1"
+
+[dev-dependencies]
+itertools = "0.10.1"
