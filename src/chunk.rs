@@ -75,7 +75,7 @@ impl<S, T> Chunk<S, T> {
         }
     }
 
-    /// Returns an iterator of roughly `division` roughly fixed-sized chunks of the chunk.
+    /// Returns an iterator with roughly `division` length of roughly fixed-sized chunks of the chunk.
     ///
     /// The chunk size is determined by `division`. The last chunk maybe shorter if
     /// there aren't enough elements. If `division` is `None`, it defaults to

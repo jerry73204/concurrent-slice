@@ -1,6 +1,6 @@
 use crate::{chunk::Chunk, chunks::Chunks, common::*, iter::Iter, windows::Windows};
 
-/// The trait provides extensions for concurrent processing on slice-like types.
+/// The trait adds methods for concurrent processing on any type that can be borrowed as a slice.
 pub trait ConcurrentSlice<T> {
     /// Splits the slice-like data into two sub-slices, divided at specified index.
     ///
@@ -61,7 +61,7 @@ pub trait ConcurrentSlice<T> {
         }
     }
 
-    /// Returns an iterator of roughly `division` roughly fixed-sized chunks of the slice.
+    /// Returns an iterator with roughly `division` length of roughly fixed-sized chunks of the slice.
     ///
     /// The chunk size is determined by `division`. The last chunk maybe shorter if
     /// there aren't enough elements. If `division` is `None`, it defaults to
@@ -99,6 +99,7 @@ pub trait ConcurrentSlice<T> {
         }
     }
 
+    /// Returns an iterator of owned references to each element of the slice.
     fn owning_iter(self) -> Iter<Self, T>
     where
         Self: 'static + Send + Deref + CloneStableAddress,
@@ -108,6 +109,9 @@ pub trait ConcurrentSlice<T> {
         Iter { owner, index: 0 }
     }
 
+    /// Returns an iterator of owned windows of length `size`.
+    /// The windows are contiguous and overlap. If the slice is shorter than size,
+    /// the iterator returns no values.
     fn owning_windows(self, size: usize) -> Windows<Self, T>
     where
         Self: 'static + Send + Deref + CloneStableAddress,

@@ -1,5 +1,6 @@
 use crate::common::*;
 
+/// The iterator returned from [owning_iter()](crate::slice::ConcurrentSlice::owning_iter).
 #[derive(Debug)]
 pub struct Iter<S, T> {
     pub(super) owner: OwningRef<S, [T]>,

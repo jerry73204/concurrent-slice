@@ -1,6 +1,6 @@
 use crate::common::*;
 
-/// The guard is used to recover the owning data from [Chunks].
+/// The guard is used to recover the owning data from [Chunks](crate::chunks::Chunks).
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct Guard<S> {

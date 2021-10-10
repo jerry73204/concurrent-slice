@@ -1,3 +1,5 @@
+//! The crate extends slice-type types with methods for concurrent processing.
+
 mod chunk;
 mod chunks;
 mod common;
