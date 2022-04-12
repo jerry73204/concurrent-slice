@@ -1,14 +1,14 @@
-use crate::{chunk::Chunk, common::*};
+use crate::{chunk_mut::ChunkMut, common::*};
 
-pub use sized_chunks::*;
-mod sized_chunks {
+pub use sized_chunks_mut::*;
+mod sized_chunks_mut {
     use super::*;
 
     /// An iterator that yields [chunks](Chunk).
     #[derive(Debug)]
-    pub struct SizedChunks<'a, S, T>
+    pub struct SizedChunksMut<'a, S, T>
     where
-        S: AsRef<[T]> + Send + Sync + 'a,
+        S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
         pub(crate) index: usize,
@@ -18,9 +18,9 @@ mod sized_chunks {
         pub(crate) _phantom: PhantomData<&'a T>,
     }
 
-    impl<'a, S, T> SizedChunks<'a, S, T>
+    impl<'a, S, T> SizedChunksMut<'a, S, T>
     where
-        S: AsRef<[T]> + Send + Sync + 'a,
+        S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
         pub fn into_arc_owner(self) -> Arc<S> {
@@ -55,12 +55,12 @@ mod sized_chunks {
         }
     }
 
-    impl<'a, S, T> Iterator for SizedChunks<'a, S, T>
+    impl<'a, S, T> Iterator for SizedChunksMut<'a, S, T>
     where
-        S: AsRef<[T]> + Send + Sync + 'a,
+        S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
-        type Item = Chunk<'a, S, T>;
+        type Item = ChunkMut<'a, S, T>;
 
         fn next(&mut self) -> Option<Self::Item> {
             if self.index >= self.end {
@@ -74,12 +74,12 @@ mod sized_chunks {
             let owner = self.owner.clone();
 
             let slice = unsafe {
-                let ptr = Arc::as_ptr(&owner);
-                let slice: &[T] = ptr.as_ref().unwrap().as_ref();
-                NonNull::new_unchecked(&slice[start..end] as *const [T] as *mut [T])
+                let ptr = Arc::as_ptr(&owner) as *mut S;
+                let slice: &mut [T] = ptr.as_mut().unwrap().as_mut();
+                NonNull::new_unchecked(&mut slice[start..end] as *mut [T])
             };
 
-            Some(Chunk {
+            Some(ChunkMut {
                 owner,
                 slice,
                 _phantom: PhantomData,
@@ -88,15 +88,15 @@ mod sized_chunks {
     }
 }
 
-pub use even_chunks::*;
-mod even_chunks {
+pub use even_chunks_mut::*;
+mod even_chunks_mut {
     use super::*;
 
     /// An iterator that yields [chunks](Chunk).
     #[derive(Debug)]
-    pub struct EvenChunks<'a, S, T>
+    pub struct EvenChunksMut<'a, S, T>
     where
-        S: AsRef<[T]> + Send + Sync + 'a,
+        S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
         pub(crate) base_chunk_size: usize,
@@ -107,9 +107,9 @@ mod even_chunks {
         pub(crate) _phantom: PhantomData<&'a T>,
     }
 
-    impl<'a, S, T> EvenChunks<'a, S, T>
+    impl<'a, S, T> EvenChunksMut<'a, S, T>
     where
-        S: AsRef<[T]> + Send + Sync + 'a,
+        S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
         pub fn into_arc_owner(self) -> Arc<S> {
@@ -146,12 +146,12 @@ mod even_chunks {
         }
     }
 
-    impl<'a, S, T> Iterator for EvenChunks<'a, S, T>
+    impl<'a, S, T> Iterator for EvenChunksMut<'a, S, T>
     where
-        S: AsRef<[T]> + Send + Sync + 'a,
+        S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
-        type Item = Chunk<'a, S, T>;
+        type Item = ChunkMut<'a, S, T>;
 
         fn next(&mut self) -> Option<Self::Item> {
             debug_assert!(self.long_end <= self.short_end);
@@ -176,11 +176,11 @@ mod even_chunks {
             let owner = self.owner.clone();
             let slice = unsafe {
                 let ptr = Arc::as_ptr(&owner) as *mut S;
-                let slice: &[T] = ptr.as_ref().unwrap().as_ref();
-                NonNull::new_unchecked(&slice[start..end] as *const [T] as *mut [T])
+                let slice: &mut [T] = ptr.as_mut().unwrap().as_mut();
+                NonNull::new_unchecked(&mut slice[start..end] as *mut [T])
             };
 
-            Some(Chunk {
+            Some(ChunkMut {
                 owner,
                 slice,
                 _phantom: PhantomData,
