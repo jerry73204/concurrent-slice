@@ -1,4 +1,4 @@
-use crate::{chunk::Chunk, chunks::Chunks, common::*, iter::Iter, windows::Windows};
+use crate::{common::*, iter::Iter, windows::Windows};
 
 /// The trait adds methods for concurrent processing on any type that can be borrowed as a slice.
 pub trait ConcurrentSlice<T> {

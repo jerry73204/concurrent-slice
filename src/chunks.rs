@@ -2,22 +2,22 @@ use crate::{chunk::Chunk, common::*};
 
 /// An iterator that yields [chunks](Chunk).
 #[derive(Debug)]
-pub struct Chunks<S, T>
+pub struct Chunks<'a, S, T>
 where
-    S: 'static + Send,
-    T: 'static + Send,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     pub(super) index: usize,
     pub(super) chunk_size: usize,
     pub(super) end: usize,
     pub(super) data: Arc<S>,
-    pub(super) _phantom: PhantomData<T>,
+    pub(super) _phantom: PhantomData<&'a T>,
 }
 
-impl<S, T> Chunks<S, T>
+impl<'a, S, T> Chunks<'a, S, T>
 where
-    S: 'static + Send,
-    T: 'static + Send,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     pub fn into_arc_owner(self) -> Arc<S> {
         self.data
@@ -51,12 +51,12 @@ where
     }
 }
 
-impl<S, T> Iterator for Chunks<S, T>
+impl<'a, S, T> Iterator for Chunks<'a, S, T>
 where
-    S: 'static + AsMut<[T]> + Send,
-    T: 'static + Send,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
-    type Item = Chunk<S, T>;
+    type Item = Chunk<'a, S, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.end {
@@ -75,6 +75,10 @@ where
             NonNull::new_unchecked(&mut slice[start..end] as *mut [T])
         };
 
-        Some(Chunk { data, slice })
+        Some(Chunk {
+            owner: data,
+            slice,
+            _phantom: PhantomData,
+        })
     }
 }

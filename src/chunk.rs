@@ -2,25 +2,35 @@ use crate::{chunks::Chunks, common::*};
 
 /// A mutable sub-slice reference-counted reference to a slice-like data.
 #[derive(Debug)]
-pub struct Chunk<S, T>
+pub struct Chunk<'a, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
-    pub(super) data: Arc<S>,
+    pub(super) owner: Arc<S>,
     pub(super) slice: NonNull<[T]>,
+    pub(super) _phantom: PhantomData<&'a S>,
 }
 
-impl<S, T> Chunk<S, T>
+impl<'a, S, T> Chunk<'a, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     pub fn new(owner: S) -> Self {
+        Self::from_arc(Arc::new(owner))
+    }
+
+    pub fn from_arc(owner: Arc<S>) -> Self {
         unsafe {
-            let data = Arc::new(owner);
-            let ptr = Arc::as_ptr(&data) as *mut S;
+            let ptr = Arc::as_ptr(&owner) as *mut S;
             let slice: &mut [T] = ptr.as_mut().unwrap().as_mut();
             let slice = NonNull::new_unchecked(slice as *mut [T]);
-            Self { data, slice }
+            Self {
+                owner,
+                slice,
+                _phantom: PhantomData,
+            }
         }
     }
 
@@ -28,24 +38,23 @@ where
     ///
     /// # Panics
     /// The method panics if the index is out of bound.
-    pub fn split_at(mut self, index: usize) -> (Chunk<S, T>, Chunk<S, T>)
-    where
-        T: 'static + Send,
-    {
+    pub fn split_at(mut self, index: usize) -> (Chunk<'a, S, T>, Chunk<'a, S, T>) {
         unsafe {
-            let data = self.data;
+            let owner = self.owner;
             let slice: &mut [T] = self.slice.as_mut();
             let lslice = NonNull::new_unchecked(&mut slice[0..index] as *mut [T]);
             let rslice = NonNull::new_unchecked(&mut slice[index..] as *mut [T]);
 
             (
                 Chunk {
-                    data: data.clone(),
+                    owner: owner.clone(),
                     slice: lslice,
+                    _phantom: PhantomData,
                 },
                 Chunk {
-                    data,
+                    owner,
                     slice: rslice,
+                    _phantom: PhantomData,
                 },
             )
         }
@@ -61,15 +70,11 @@ where
     ///
     /// # Panics
     /// The method panics if `chunk_size` is zero and slice length is not zero.
-    pub fn into_sized_chunks(self, chunk_size: usize) -> Chunks<S, T>
-    where
-        S: 'static + Sized + Send,
-        T: 'static + Send,
-    {
+    pub fn into_sized_chunks(self, chunk_size: usize) -> Chunks<'a, S, T> {
         assert!(mem::size_of::<T>() > 0, "zero-sized type is not allowed");
 
         unsafe {
-            let owner = self.data;
+            let owner = self.owner;
             let owner_ptr = Arc::as_ptr(&owner) as *mut S;
             let owner_slice = owner_ptr.as_mut().unwrap().as_mut();
 
@@ -98,15 +103,11 @@ where
     ///
     /// # Panics
     /// The method panics if `division` is zero and slice length is not zero.
-    pub fn into_even_chunks(self, num_chunks: usize) -> Chunks<S, T>
-    where
-        S: 'static + Sized + Send,
-        T: 'static + Send,
-    {
+    pub fn into_even_chunks(self, num_chunks: usize) -> Chunks<'a, S, T> {
         assert!(mem::size_of::<T>() > 0, "zero-sized type is not allowed");
 
         unsafe {
-            let data = self.data;
+            let data = self.owner;
             let data_ptr = Arc::as_ptr(&data) as *mut S;
             let data_slice = data_ptr.as_mut().unwrap().as_mut();
 
@@ -130,7 +131,7 @@ where
 
     /// Gets the reference count on the owning data.
     pub fn ref_count(&self) -> usize {
-        Arc::strong_count(&self.data)
+        Arc::strong_count(&self.owner)
     }
 
     /// Concatenates contiguous chunks into one chunk.
@@ -141,21 +142,20 @@ where
     pub fn cat<I>(chunks: I) -> Self
     where
         I: IntoIterator<Item = Self>,
-        S: AsMut<[T]>,
     {
         unsafe {
             let mut chunks = chunks.into_iter();
 
             // obtain inner pointer from the first chunk
             let first = chunks.next().expect("the chunks must be non-empty");
-            let data = first.data.clone();
+            let owner = first.owner.clone();
 
             let mut chunks: Vec<_> = iter::once(first)
                 .chain(chunks.inspect(|chunk| {
                     // verify if all chunks points to the same owner
                     assert_eq!(
-                        Arc::as_ptr(&chunk.data),
-                        Arc::as_ptr(&data),
+                        Arc::as_ptr(&chunk.owner),
+                        Arc::as_ptr(&owner),
                         "inconsistent owner of the chunks"
                     );
                 }))
@@ -184,18 +184,22 @@ where
                 NonNull::new_unchecked(slice as *mut [T])
             };
 
-            Chunk { data, slice }
+            Chunk {
+                owner,
+                slice,
+                _phantom: PhantomData,
+            }
         }
     }
 
     pub fn into_arc_owner(self) -> Arc<S> {
-        self.data
+        self.owner
     }
 
     pub fn into_arc_ref(self) -> ArcRef<S, [T]> {
         unsafe {
-            let Self { data, slice } = self;
-            ArcRef::new(data).map(|_| slice.as_ref())
+            let Self { owner, slice, .. } = self;
+            ArcRef::new(owner).map(|_| slice.as_ref())
         }
     }
 
@@ -204,35 +208,52 @@ where
     /// The method succeeds if the referencing chunk iterator and all chunks are dropped.
     /// Otherwise, it returns the guard intact.
     pub fn try_unwrap_owner(self) -> Result<S, Self> {
-        let Self { data, slice } = self;
-        Arc::try_unwrap(data).map_err(|data| Self { data, slice })
+        let Self { owner, slice, .. } = self;
+        Arc::try_unwrap(owner).map_err(|owner| Self {
+            owner,
+            slice,
+            _phantom: PhantomData,
+        })
     }
 }
 
-unsafe impl<S, T> Send for Chunk<S, T> where S: AsMut<[T]> {}
-unsafe impl<S, T> Sync for Chunk<S, T> where S: AsMut<[T]> {}
-
-impl<S, T> AsRef<[T]> for Chunk<S, T>
+unsafe impl<'a, S, T> Send for Chunk<'a, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
+{
+}
+unsafe impl<'a, S, T> Sync for Chunk<'a, S, T>
+where
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
+{
+}
+
+impl<'a, S, T> AsRef<[T]> for Chunk<'a, S, T>
+where
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     fn as_ref(&self) -> &[T] {
         self.deref()
     }
 }
 
-impl<S, T> AsMut<[T]> for Chunk<S, T>
+impl<'a, S, T> AsMut<[T]> for Chunk<'a, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     fn as_mut(&mut self) -> &mut [T] {
         self.deref_mut()
     }
 }
 
-impl<S, T> Deref for Chunk<S, T>
+impl<'a, S, T> Deref for Chunk<'a, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     type Target = [T];
 
@@ -241,18 +262,20 @@ where
     }
 }
 
-impl<S, T> DerefMut for Chunk<S, T>
+impl<'a, S, T> DerefMut for Chunk<'a, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.slice.as_mut() }
     }
 }
 
-impl<'a, S, T> IntoIterator for &'a Chunk<S, T>
+impl<'a, S, T> IntoIterator for &'a Chunk<'_, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     type Item = &'a T;
     type IntoIter = slice::Iter<'a, T>;
@@ -262,9 +285,10 @@ where
     }
 }
 
-impl<'a, S, T> IntoIterator for &'a mut Chunk<S, T>
+impl<'a, S, T> IntoIterator for &'a mut Chunk<'_, S, T>
 where
-    S: AsMut<[T]>,
+    S: AsMut<[T]> + Send + Sync + 'a,
+    T: Send + Sync,
 {
     type Item = &'a mut T;
     type IntoIter = slice::IterMut<'a, T>;

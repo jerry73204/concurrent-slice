@@ -3,6 +3,16 @@ use itertools::izip;
 use std::sync::Arc;
 
 #[test]
+fn lifetime_test() {
+    let orig = &mut [0, 1, 2, 3, 4];
+    let chunk: Chunk<'_, _, _> = Chunk::new(orig);
+
+    let (lslice, rslice) = chunk.split_at(3);
+    assert_eq!(&*lslice, &[0, 1, 2]);
+    assert_eq!(&*rslice, &[3, 4]);
+}
+
+#[test]
 fn merge_chunks_test() {
     let orig: Vec<_> = (0..16).collect();
 
