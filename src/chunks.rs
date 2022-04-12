@@ -1,4 +1,4 @@
-use crate::{chunk::Chunk, common::*, guard::Guard};
+use crate::{chunk::Chunk, common::*};
 
 /// An iterator that yields [chunks](Chunk).
 #[derive(Debug)]
@@ -19,11 +19,30 @@ where
     S: 'static + Send,
     T: 'static + Send,
 {
-    /// Obtains the guard that is used to recover the owning data.
-    pub fn guard(&self) -> Guard<S> {
-        Guard {
-            data: self.data.clone(),
-        }
+    pub fn into_arc_owner(self) -> Arc<S> {
+        self.data
+    }
+
+    /// Tries to recover the owning data.
+    ///
+    /// The method succeeds if the referencing chunk iterator and all chunks are dropped.
+    /// Otherwise, it returns the guard intact.
+    pub fn try_unwrap_owner(self) -> Result<S, Self> {
+        let Self {
+            index,
+            chunk_size,
+            end,
+            data,
+            ..
+        } = self;
+
+        Arc::try_unwrap(data).map_err(|data| Self {
+            index,
+            chunk_size,
+            end,
+            data,
+            _phantom: PhantomData,
+        })
     }
 
     /// Gets the reference count on the owning data.

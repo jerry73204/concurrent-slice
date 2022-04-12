@@ -4,6 +4,7 @@ pub use std::{
     fmt::Debug,
     iter::{self, ExactSizeIterator},
     marker::PhantomData,
+    mem,
     ops::{Deref, DerefMut},
     ptr::{self, NonNull},
     slice,

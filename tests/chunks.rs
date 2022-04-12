@@ -6,14 +6,12 @@ use std::sync::Arc;
 fn merge_chunks_test() {
     let orig: Vec<_> = (0..16).collect();
 
-    let mut chunks = orig.concurrent_chunks_by_division(3);
+    let mut chunks = Chunk::new(orig).into_even_chunks(3);
     let _ = chunks.next().unwrap();
     let _ = chunks.next().unwrap();
     let _ = chunks.next().unwrap();
 
-    let guard = chunks.guard();
-    drop(chunks);
-    let new = guard.try_unwrap().unwrap();
+    let new = chunks.try_unwrap_owner().unwrap();
 
     assert!(izip!(new, 0..16).all(|(lhs, rhs)| lhs == rhs));
 }
@@ -22,7 +20,7 @@ fn merge_chunks_test() {
 fn concat_chunks_test() {
     let orig: Vec<_> = (0..25).collect();
 
-    let mut chunks = orig.concurrent_chunks_by_division(4);
+    let mut chunks = Chunk::new(orig).into_even_chunks(4);
     let chunk1 = chunks.next().unwrap();
     let chunk2 = chunks.next().unwrap();
     let chunk3 = chunks.next().unwrap();
@@ -38,9 +36,7 @@ fn concat_chunks_test() {
     let chunk1234 = Chunk::cat(vec![chunk12, chunk34]);
     assert!(izip!(&chunk1234, 0..25).all(|(&lhs, rhs)| lhs == rhs));
 
-    let guard = chunk1234.guard();
-    drop(chunk1234);
-    let new = guard.try_unwrap().unwrap();
+    let new = chunk1234.try_unwrap_owner().unwrap();
 
     assert!(izip!(&new, 0..25).all(|(&lhs, rhs)| lhs == rhs));
 }
@@ -48,7 +44,7 @@ fn concat_chunks_test() {
 #[test]
 fn concurrent_chunks_test() {
     let vec: Vec<_> = (0..16).collect();
-    let chunks: Vec<_> = vec.concurrent_chunks_by_division(3).collect();
+    let chunks: Vec<_> = Chunk::new(vec).into_even_chunks(3).collect();
     assert_eq!(chunks.len(), 3);
     assert!(izip!(&chunks[0], 0..6).all(|(&lhs, rhs)| lhs == rhs));
     assert!(izip!(&chunks[1], 6..12).all(|(&lhs, rhs)| lhs == rhs));
@@ -57,8 +53,8 @@ fn concurrent_chunks_test() {
 
 #[test]
 fn empty_concurrent_chunks_test() {
-    assert_eq!([(); 0].concurrent_chunks(2).count(), 0);
-    assert_eq!([(); 0].concurrent_chunks_by_division(None).count(), 0);
+    assert_eq!(Chunk::new([1u8; 0]).into_sized_chunks(2).count(), 0);
+    assert_eq!(Chunk::new([1u8; 0]).into_even_chunks(1).count(), 0);
 }
 
 #[test]
@@ -86,7 +82,7 @@ fn owning_windows_test() {
 #[test]
 fn split_at_test() {
     let vec: Vec<_> = (0..16).collect();
-    let (lslice, rslice) = vec.concurrent_split_at(5);
+    let (lslice, rslice) = Chunk::new(vec).split_at(5);
     assert!(izip!(&lslice, 0..5).all(|(&lhs, rhs)| lhs == rhs));
     assert!(izip!(&rslice, 5..16).all(|(&lhs, rhs)| lhs == rhs));
 }
@@ -94,14 +90,14 @@ fn split_at_test() {
 #[test]
 fn chunks_of_chunk_test() {
     let owner: Vec<_> = (0..9).collect();
-    let mut chunks = owner.concurrent_chunks_by_division(2);
+    let mut chunks = Chunk::new(owner).into_even_chunks(2);
 
     let chunk1 = chunks.next().unwrap();
     let chunk2 = chunks.next().unwrap();
     assert!(chunks.next().is_none());
     drop(chunks);
 
-    let mut chunks = chunk1.chunks(3);
+    let mut chunks = chunk1.into_sized_chunks(3);
     let chunk3 = chunks.next().unwrap();
     let chunk4 = chunks.next().unwrap();
     assert!(chunks.next().is_none());
@@ -109,7 +105,7 @@ fn chunks_of_chunk_test() {
     assert_eq!(&*chunk4, &[3, 4]);
     drop(chunks);
 
-    let mut chunks = chunk2.chunks_by_division(3);
+    let mut chunks = chunk2.into_even_chunks(3);
     let chunk5 = chunks.next().unwrap();
     let chunk6 = chunks.next().unwrap();
     assert!(chunks.next().is_none());
@@ -124,14 +120,12 @@ fn chunks_of_chunk_test() {
     assert_eq!(&*chunk9, &[4, 5, 6]);
 
     // if the ref count is correct, the data should be recovered
-    let guard = chunk6.guard();
 
     drop(chunks);
     drop(chunk3);
-    drop(chunk6);
     drop(chunk8);
     drop(chunk9);
 
-    let owner = guard.try_unwrap().unwrap();
+    let owner = chunk6.try_unwrap_owner().unwrap();
     assert_eq!(owner, (0..9).collect::<Vec<_>>());
 }
