@@ -1,4 +1,4 @@
-use crate::{chunk::Chunk, common::*};
+use crate::{chunk::ChunkMut, common::*};
 
 pub use sized_chunks::*;
 mod sized_chunks {
@@ -60,7 +60,7 @@ mod sized_chunks {
         S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
-        type Item = Chunk<'a, S, T>;
+        type Item = ChunkMut<'a, S, T>;
 
         fn next(&mut self) -> Option<Self::Item> {
             if self.index >= self.end {
@@ -79,7 +79,7 @@ mod sized_chunks {
                 NonNull::new_unchecked(&mut slice[start..end] as *mut [T])
             };
 
-            Some(Chunk {
+            Some(ChunkMut {
                 owner,
                 slice,
                 _phantom: PhantomData,
@@ -151,7 +151,7 @@ mod even_chunks {
         S: AsMut<[T]> + Send + Sync + 'a,
         T: Send + Sync,
     {
-        type Item = Chunk<'a, S, T>;
+        type Item = ChunkMut<'a, S, T>;
 
         fn next(&mut self) -> Option<Self::Item> {
             debug_assert!(self.long_end <= self.short_end);
@@ -180,7 +180,7 @@ mod even_chunks {
                 NonNull::new_unchecked(&mut slice[start..end] as *mut [T])
             };
 
-            Some(Chunk {
+            Some(ChunkMut {
                 owner,
                 slice,
                 _phantom: PhantomData,

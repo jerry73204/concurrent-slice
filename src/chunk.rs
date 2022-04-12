@@ -2,7 +2,7 @@ use crate::{chunks::SizedChunks, common::*, EvenChunks};
 
 /// A mutable sub-slice reference-counted reference to a slice-like data.
 #[derive(Debug)]
-pub struct Chunk<'a, S, T>
+pub struct ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
@@ -12,7 +12,7 @@ where
     pub(super) _phantom: PhantomData<&'a S>,
 }
 
-impl<'a, S, T> Chunk<'a, S, T>
+impl<'a, S, T> ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
@@ -38,7 +38,7 @@ where
     ///
     /// # Panics
     /// The method panics if the index is out of bound.
-    pub fn split_at(mut self, index: usize) -> (Chunk<'a, S, T>, Chunk<'a, S, T>) {
+    pub fn split_at(mut self, index: usize) -> (ChunkMut<'a, S, T>, ChunkMut<'a, S, T>) {
         unsafe {
             let owner = self.owner;
             let slice: &mut [T] = self.slice.as_mut();
@@ -46,12 +46,12 @@ where
             let rslice = NonNull::new_unchecked(&mut slice[index..] as *mut [T]);
 
             (
-                Chunk {
+                ChunkMut {
                     owner: owner.clone(),
                     slice: lslice,
                     _phantom: PhantomData,
                 },
-                Chunk {
+                ChunkMut {
                     owner,
                     slice: rslice,
                     _phantom: PhantomData,
@@ -186,7 +186,7 @@ where
                 NonNull::new_unchecked(slice as *mut [T])
             };
 
-            Chunk {
+            ChunkMut {
                 owner,
                 slice,
                 _phantom: PhantomData,
@@ -219,21 +219,21 @@ where
     }
 }
 
-unsafe impl<'a, S, T> Send for Chunk<'a, S, T>
+unsafe impl<'a, S, T> Send for ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
 {
 }
 
-unsafe impl<'a, S, T> Sync for Chunk<'a, S, T>
+unsafe impl<'a, S, T> Sync for ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
 {
 }
 
-impl<'a, S, T> AsRef<[T]> for Chunk<'a, S, T>
+impl<'a, S, T> AsRef<[T]> for ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
@@ -243,7 +243,7 @@ where
     }
 }
 
-impl<'a, S, T> AsMut<[T]> for Chunk<'a, S, T>
+impl<'a, S, T> AsMut<[T]> for ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
@@ -253,7 +253,7 @@ where
     }
 }
 
-impl<'a, S, T> Deref for Chunk<'a, S, T>
+impl<'a, S, T> Deref for ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
@@ -265,7 +265,7 @@ where
     }
 }
 
-impl<'a, S, T> DerefMut for Chunk<'a, S, T>
+impl<'a, S, T> DerefMut for ChunkMut<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
@@ -275,7 +275,7 @@ where
     }
 }
 
-impl<'a, S, T> IntoIterator for &'a Chunk<'_, S, T>
+impl<'a, S, T> IntoIterator for &'a ChunkMut<'_, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
@@ -288,7 +288,7 @@ where
     }
 }
 
-impl<'a, S, T> IntoIterator for &'a mut Chunk<'_, S, T>
+impl<'a, S, T> IntoIterator for &'a mut ChunkMut<'_, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
     T: Send + Sync,
