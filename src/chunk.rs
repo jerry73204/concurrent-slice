@@ -1,4 +1,4 @@
-use crate::{chunks::Chunks, common::*};
+use crate::{chunks::SizedChunks, common::*, EvenChunks};
 
 /// A mutable sub-slice reference-counted reference to a slice-like data.
 #[derive(Debug)]
@@ -70,7 +70,7 @@ where
     ///
     /// # Panics
     /// The method panics if `chunk_size` is zero and slice length is not zero.
-    pub fn into_sized_chunks(self, chunk_size: usize) -> Chunks<'a, S, T> {
+    pub fn into_sized_chunks(self, chunk_size: usize) -> SizedChunks<'a, S, T> {
         assert!(mem::size_of::<T>() > 0, "zero-sized type is not allowed");
 
         unsafe {
@@ -87,11 +87,11 @@ where
                 "chunk_size must be positive for non-empty slice"
             );
 
-            Chunks {
+            SizedChunks {
                 chunk_size,
                 index: start,
                 end: start + slice_len,
-                data: owner,
+                owner,
                 _phantom: PhantomData,
             }
         }
@@ -102,28 +102,30 @@ where
     /// It returns exactly `num_chunks` mostly evenly sized chunks.
     ///
     /// # Panics
-    /// The method panics if `division` is zero and slice length is not zero.
-    pub fn into_even_chunks(self, num_chunks: usize) -> Chunks<'a, S, T> {
+    /// The method panics if `num_chunks` is zero.
+    pub fn into_even_chunks(self, num_chunks: usize) -> EvenChunks<'a, S, T> {
         assert!(mem::size_of::<T>() > 0, "zero-sized type is not allowed");
 
         unsafe {
-            let data = self.owner;
-            let data_ptr = Arc::as_ptr(&data) as *mut S;
-            let data_slice = data_ptr.as_mut().unwrap().as_mut();
+            let owner = self.owner;
+            let owner_ptr = Arc::as_ptr(&owner) as *mut S;
+            let owner_slice = owner_ptr.as_mut().unwrap().as_mut();
 
             let slice_len = self.slice.as_ref().len();
             let slice_ptr = self.slice.as_ref().as_ptr();
-            let start = slice_ptr.offset_from(data_slice.as_ptr()) as usize;
+            let start = slice_ptr.offset_from(owner_slice.as_ptr()) as usize;
 
             assert!(num_chunks > 0, "num_chunks must be positive, but get zero");
 
-            let chunk_size = (slice_len + num_chunks - 1) / num_chunks;
+            let base_chunk_size = slice_len / num_chunks;
+            let long_end = start + (slice_len % num_chunks) * (base_chunk_size + 1);
 
-            Chunks {
+            EvenChunks {
                 index: start,
-                chunk_size,
-                end: start + slice_len,
-                data,
+                base_chunk_size,
+                long_end,
+                short_end: start + slice_len,
+                owner,
                 _phantom: PhantomData,
             }
         }
@@ -138,7 +140,7 @@ where
     ///
     /// # Panics
     /// The method panics if the chunks are not contiguous, or
-    /// the chunks refer to inconsistent data.
+    /// the chunks belong to different owners.
     pub fn cat<I>(chunks: I) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -223,6 +225,7 @@ where
     T: Send + Sync,
 {
 }
+
 unsafe impl<'a, S, T> Sync for Chunk<'a, S, T>
 where
     S: AsMut<[T]> + Send + Sync + 'a,
