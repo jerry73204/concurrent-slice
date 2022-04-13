@@ -1,6 +1,5 @@
-use concurrent_slice::{Chunk, ConcurrentSlice};
+use concurrent_slice::Chunk;
 use itertools::izip;
-use std::sync::Arc;
 
 #[test]
 fn lifetime_test() {
@@ -73,21 +72,21 @@ fn empty_concurrent_chunks_test() {
 }
 
 #[test]
-fn owning_iter_test() {
+fn iter_owned_test() {
     let owner: Vec<_> = (0..3).collect();
-    let owner = Arc::new(owner);
-    let mut windows = owner.owning_iter();
-    assert_eq!(*windows.next().unwrap(), 0);
-    assert_eq!(*windows.next().unwrap(), 1);
-    assert_eq!(*windows.next().unwrap(), 2);
-    assert!(windows.next().is_none());
+    let owner = Chunk::new(owner);
+    let mut iter = owner.into_iter_owned();
+    assert_eq!(*iter.next().unwrap(), 0);
+    assert_eq!(*iter.next().unwrap(), 1);
+    assert_eq!(*iter.next().unwrap(), 2);
+    assert!(iter.next().is_none());
 }
 
 #[test]
 fn owning_windows_test() {
     let owner: Vec<_> = (0..5).collect();
-    let owner = Arc::new(owner);
-    let mut windows = owner.owning_windows(3);
+    let owner = Chunk::new(owner);
+    let mut windows = owner.into_windows_owned(3);
     assert_eq!(&*windows.next().unwrap(), &[0, 1, 2]);
     assert_eq!(&*windows.next().unwrap(), &[1, 2, 3]);
     assert_eq!(&*windows.next().unwrap(), &[2, 3, 4]);

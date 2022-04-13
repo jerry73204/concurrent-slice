@@ -1,5 +1,7 @@
+use std::{ops::RangeBounds, slice::SliceIndex};
+
 use crate::{
-    chunks_mut::{EvenChunksMut, SizedChunksMut},
+    chunks_mut::{EvenChunksMut, IterMut, SizedChunksMut},
     common::*,
 };
 
@@ -77,13 +79,9 @@ where
         assert!(mem::size_of::<T>() > 0, "zero-sized type is not allowed");
 
         unsafe {
+            let start = self.start_index();
             let owner = self.owner;
-            let owner_ptr = Arc::as_ptr(&owner) as *mut S;
-            let owner_slice = owner_ptr.as_mut().unwrap().as_mut();
-
             let slice_len = self.slice.as_ref().len();
-            let slice_ptr = self.slice.as_ref().as_ptr();
-            let start = slice_ptr.offset_from(owner_slice.as_ptr()) as usize;
 
             assert!(
                 slice_len == 0 || chunk_size > 0,
@@ -110,13 +108,9 @@ where
         assert!(mem::size_of::<T>() > 0, "zero-sized type is not allowed");
 
         unsafe {
+            let start = self.start_index();
             let owner = self.owner;
-            let owner_ptr = Arc::as_ptr(&owner) as *mut S;
-            let owner_slice = owner_ptr.as_mut().unwrap().as_mut();
-
             let slice_len = self.slice.as_ref().len();
-            let slice_ptr = self.slice.as_ref().as_ptr();
-            let start = slice_ptr.offset_from(owner_slice.as_ptr()) as usize;
 
             assert!(num_chunks > 0, "num_chunks must be positive, but get zero");
 
@@ -197,6 +191,24 @@ where
         }
     }
 
+    pub fn into_range<R>(self, range: R) -> Option<Self>
+    where
+        R: RangeBounds<usize> + SliceIndex<[T], Output = [T]>,
+    {
+        unsafe {
+            let Self { owner, slice, .. } = self;
+            let slice: &mut [T] = slice.clone().as_mut();
+            let new_slice: &mut [T] = slice.get_mut(range)?;
+            let new_slice_ptr = NonNull::new_unchecked(new_slice);
+
+            Some(Self {
+                owner,
+                slice: new_slice_ptr,
+                _phantom: PhantomData,
+            })
+        }
+    }
+
     pub fn into_arc_owner(self) -> Arc<S> {
         self.owner
     }
@@ -219,6 +231,32 @@ where
             slice,
             _phantom: PhantomData,
         })
+    }
+
+    /// Returns an iterator of owned references to each element of the slice.
+    pub fn into_iter_owned(self) -> IterMut<'a, S, T> {
+        unsafe {
+            let index = self.start_index();
+            let Self { owner, slice, .. } = self;
+            let end = index + slice.as_ref().len();
+
+            IterMut {
+                owner,
+                index,
+                end,
+                _phantom: PhantomData,
+            }
+        }
+    }
+
+    fn start_index(&self) -> usize {
+        unsafe {
+            let owner_ptr = Arc::as_ptr(&self.owner) as *mut S;
+            let owner_slice = owner_ptr.as_mut().unwrap().as_mut();
+
+            let slice_ptr = self.slice.as_ref().as_ptr();
+            slice_ptr.offset_from(owner_slice.as_ptr()) as usize
+        }
     }
 }
 
