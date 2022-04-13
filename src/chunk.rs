@@ -1,4 +1,7 @@
-use crate::{chunks::EvenChunks, chunks::Iter, chunks::SizedChunks, chunks::Windows, common::*};
+use crate::{
+    chunks::{EvenChunks, Iter, SizedChunks, Windows},
+    common::*,
+};
 use std::{ops::RangeBounds, slice::SliceIndex};
 
 /// A mutable sub-slice reference-counted reference to a slice-like data.
